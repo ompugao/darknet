@@ -9,6 +9,21 @@
 
 #include "utils.h"
 
+int *read_map(char *filename)
+{
+    int n = 0;
+    int *map = 0;
+    char *str;
+    FILE *file = fopen(filename, "r");
+    if(!file) file_error(filename);
+    while((str=fgetl(file))){
+        ++n;
+        map = realloc(map, n*sizeof(int));
+        map[n-1] = atoi(str);
+    }
+    return map;
+}
+
 void sorta_shuffle(void *arr, size_t n, size_t size, size_t sections)
 {
     size_t i;
@@ -135,23 +150,20 @@ void pm(int M, int N, float *A)
     printf("\n");
 }
 
-char *find_replace(char *str, char *orig, char *rep)
+void find_replace(char *str, char *orig, char *rep, char *output)
 {
-    static char buffer[4096];
-    static char buffer2[4096];
-    static char buffer3[4096];
+    char buffer[4096] = {0};
     char *p;
 
-    if(!(p = strstr(str, orig)))  // Is 'orig' even in 'str'?
-        return str;
+    sprintf(buffer, "%s", str);
+    if(!(p = strstr(buffer, orig))){  // Is 'orig' even in 'str'?
+        sprintf(output, "%s", str);
+        return;
+    }
 
-    strncpy(buffer2, str, p-str); // Copy characters from 'str' start to 'orig' st$
-    buffer2[p-str] = '\0';
+    *p = '\0';
 
-    sprintf(buffer3, "%s%s%s", buffer2, rep, p+strlen(orig));
-    sprintf(buffer, "%s", buffer3);
-
-    return buffer;
+    sprintf(output, "%s%s%s", buffer, rep, p+strlen(orig));
 }
 
 float sec(clock_t clocks)
@@ -273,6 +285,42 @@ char *fgetl(FILE *fp)
     return line;
 }
 
+int read_int(int fd)
+{
+    int n = 0;
+    int next = read(fd, &n, sizeof(int));
+    if(next <= 0) return -1;
+    return n;
+}
+
+void write_int(int fd, int n)
+{
+    int next = write(fd, &n, sizeof(int));
+    if(next <= 0) error("read failed");
+}
+
+int read_all_fail(int fd, char *buffer, size_t bytes)
+{
+    size_t n = 0;
+    while(n < bytes){
+        int next = read(fd, buffer + n, bytes-n);
+        if(next <= 0) return 1;
+        n += next;
+    }
+    return 0;
+}
+
+int write_all_fail(int fd, char *buffer, size_t bytes)
+{
+    size_t n = 0;
+    while(n < bytes){
+        size_t next = write(fd, buffer + n, bytes-n);
+        if(next <= 0) return 1;
+        n += next;
+    }
+    return 0;
+}
+
 void read_all(int fd, char *buffer, size_t bytes)
 {
     size_t n = 0;
@@ -378,6 +426,13 @@ void mean_arrays(float **a, int n, int els, float *avg)
     }
 }
 
+void print_statistics(float *a, int n)
+{
+    float m = mean_array(a, n);
+    float v = variance_array(a, n);
+    printf("MSE: %.6f, Mean: %.6f, Variance: %.6f\n", mse_array(a, n), m, v);
+}
+
 float variance_array(float *a, int n)
 {
     int i;
@@ -388,11 +443,26 @@ float variance_array(float *a, int n)
     return variance;
 }
 
+int constrain_int(int a, int min, int max)
+{
+    if (a < min) return min;
+    if (a > max) return max;
+    return a;
+}
+
 float constrain(float min, float max, float a)
 {
     if (a < min) return min;
     if (a > max) return max;
     return a;
+}
+
+float dist_array(float *a, float *b, int n, int sub)
+{
+    int i;
+    float sum = 0;
+    for(i = 0; i < n; i += sub) sum += pow(a[i]-b[i], 2);
+    return sqrt(sum);
 }
 
 float mse_array(float *a, int n)
@@ -428,7 +498,7 @@ float mag_array(float *a, int n)
     int i;
     float sum = 0;
     for(i = 0; i < n; ++i){
-        sum += a[i]*a[i];   
+        sum += a[i]*a[i];
     }
     return sqrt(sum);
 }
@@ -439,6 +509,19 @@ void scale_array(float *a, int n, float s)
     for(i = 0; i < n; ++i){
         a[i] *= s;
     }
+}
+
+int sample_array(float *a, int n)
+{
+    float sum = sum_array(a, n);
+    scale_array(a, n, 1./sum);
+    float r = rand_uniform(0, 1);
+    int i;
+    for(i = 0; i < n; ++i){
+        r = r - a[i];
+        if (r <= 0) return i;
+    }
+    return n-1;
 }
 
 int max_index(float *a, int n)
@@ -457,12 +540,16 @@ int max_index(float *a, int n)
 
 int rand_int(int min, int max)
 {
+    if (max < min){
+        int s = min;
+        min = max;
+        max = s;
+    }
     int r = (rand()%(max - min + 1)) + min;
     return r;
 }
 
 // From http://en.wikipedia.org/wiki/Box%E2%80%93Muller_transform
-#define TWO_PI 6.2831853071795864769252866
 float rand_normal()
 {
     static int haveSpare = 0;
@@ -495,9 +582,33 @@ float rand_normal()
    }
  */
 
+size_t rand_size_t()
+{
+    return  ((size_t)(rand()&0xff) << 56) |
+            ((size_t)(rand()&0xff) << 48) |
+            ((size_t)(rand()&0xff) << 40) |
+            ((size_t)(rand()&0xff) << 32) |
+            ((size_t)(rand()&0xff) << 24) |
+            ((size_t)(rand()&0xff) << 16) |
+            ((size_t)(rand()&0xff) << 8) |
+            ((size_t)(rand()&0xff) << 0);
+}
+
 float rand_uniform(float min, float max)
 {
+    if(max < min){
+        float swap = min;
+        min = max;
+        max = swap;
+    }
     return ((float)rand()/RAND_MAX * (max - min)) + min;
+}
+
+float rand_scale(float s)
+{
+    float scale = rand_uniform(1, s);
+    if(rand()%2) return scale;
+    return 1./scale;
 }
 
 float **one_hot_encode(float *a, int n, int k)
@@ -511,4 +622,3 @@ float **one_hot_encode(float *a, int n, int k)
     }
     return t;
 }
-

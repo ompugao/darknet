@@ -6,9 +6,8 @@
 #include "opencv2/highgui/highgui_c.h"
 #endif
 
-void train_tag(char *cfgfile, char *weightfile)
+void train_tag(char *cfgfile, char *weightfile, int clear)
 {
-    data_seed = time(0);
     srand(time(0));
     float avg_loss = -1;
     char *base = basecfg(cfgfile);
@@ -18,6 +17,8 @@ void train_tag(char *cfgfile, char *weightfile)
     if(weightfile){
         load_weights(net, weightfile);
     }
+
+    if(clear) *(net->seen) = 0;
     printf("Learning Rate: %g, Momentum: %g, Decay: %g\n", net->learning_rate, net->momentum, net->decay);
     int imgs = 1024;
     list *plist = get_paths("/home/pjreddie/tag/train.list");
@@ -43,6 +44,11 @@ void train_tag(char *cfgfile, char *weightfile)
     args.m = N;
     args.d = &buffer;
     args.type = TAG_DATA;
+
+    args.angle = net->angle;
+    args.exposure = net->exposure;
+    args.saturation = net->saturation;
+    args.hue = net->hue;
 
     fprintf(stderr, "%d classes\n", net->outputs);
 
@@ -124,7 +130,7 @@ void test_tag(char *cfgfile, char *weightfile, char *filename)
             int index = indexes[i];
             printf("%.1f%%: %s\n", predictions[index]*100, names[index]);
         }
-        free_image(r);
+        if(r.data != im.data) free_image(r);
         free_image(im);
         if (filename) break;
     }
@@ -138,10 +144,10 @@ void run_tag(int argc, char **argv)
         return;
     }
 
+    int clear = find_arg(argc, argv, "-clear");
     char *cfg = argv[3];
     char *weights = (argc > 4) ? argv[4] : 0;
     char *filename = (argc > 5) ? argv[5] : 0;
-    if(0==strcmp(argv[2], "train")) train_tag(cfg, weights);
+    if(0==strcmp(argv[2], "train")) train_tag(cfg, weights, clear);
     else if(0==strcmp(argv[2], "test")) test_tag(cfg, weights, filename);
 }
-

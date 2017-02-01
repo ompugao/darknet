@@ -3,6 +3,8 @@
 *.csv
 *.out
 *.png
+*.jpg
+old/
 mnist/
 data/
 caffe/
@@ -14,6 +16,7 @@ decaf/
 submission/
 cfg/
 darknet
+.fuse*
 
 # OS Generated #
 .DS_Store*
