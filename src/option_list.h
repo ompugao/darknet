@@ -9,6 +9,10 @@ typedef struct{
 } kvp;
 
 
+#if defined (__cplusplus)
+extern "C" {
+#endif
+
 list *read_data_cfg(char *filename);
 int read_option(char *s, list *options);
 void option_insert(list *l, char *key, char *val);
@@ -20,4 +24,7 @@ float option_find_float(list *l, char *key, float def);
 float option_find_float_quiet(list *l, char *key, float def);
 void option_unused(list *l);
 
+#if defined (__cplusplus)
+}
+#endif
 #endif
